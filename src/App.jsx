@@ -5,6 +5,7 @@ export default function IntervalTimer() {
   const [secondaryInterval, setSecondaryInterval] = useState(10);
   const [useSecondary, setUseSecondary] = useState(false);
   const [tickInterval, setTickInterval] = useState(0); // 0 = off, 1 = every second, 5 = every 5 sec
+  const [volume, setVolume] = useState(0.7); // 0 to 1
   const [isRunning, setIsRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [isPrimaryPhase, setIsPrimaryPhase] = useState(true);
@@ -24,56 +25,60 @@ export default function IntervalTimer() {
   }, []);
 
   const playBeep = useCallback(() => {
+    if (volume === 0) return;
     const ctx = getAudioContext();
     const now = ctx.currentTime;
-    
+
     // Pleasant major chord chime
     const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5
-    
+    const peakGain = 0.9 * volume; // Max 0.9 per oscillator to avoid clipping
+
     frequencies.forEach((freq, i) => {
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(ctx.destination);
-      
+
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(freq, now);
-      
+
       const startTime = now + i * 0.05;
       const duration = 0.3;
-      
+
       gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(0.5, startTime + 0.02);
+      gainNode.gain.linearRampToValueAtTime(peakGain, startTime + 0.02);
       gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-      
+
       oscillator.start(startTime);
       oscillator.stop(startTime + duration);
     });
-  }, [getAudioContext]);
+  }, [getAudioContext, volume]);
 
   const playTick = useCallback(() => {
+    if (volume === 0) return;
     const ctx = getAudioContext();
     const now = ctx.currentTime;
-    
+
     // Soft, short tick sound
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(ctx.destination);
-    
+
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(880, now); // A5 - higher, subtle
-    
+
+    const peakGain = 0.5 * volume; // Scaled by volume
     const duration = 0.05;
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
+    gainNode.gain.linearRampToValueAtTime(peakGain, now + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    
+
     oscillator.start(now);
     oscillator.stop(now + duration);
-  }, [getAudioContext]);
+  }, [getAudioContext, volume]);
 
   const tick = useCallback((timestamp) => {
     if (!startTimeRef.current) {
@@ -351,8 +356,50 @@ export default function IntervalTimer() {
         )}
       </div>
       
+      {/* Volume Control */}
+      <div className="mt-8 w-full max-w-xs">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-purple-300 text-sm uppercase tracking-wider">
+            Volume
+          </label>
+          <span className="text-purple-200 text-sm tabular-nums">
+            {Math.round(volume * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={volume * 100}
+          onChange={(e) => setVolume(Number(e.target.value) / 100)}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer bg-white/20
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-5
+            [&::-webkit-slider-thumb]:h-5
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:bg-gradient-to-r
+            [&::-webkit-slider-thumb]:from-purple-400
+            [&::-webkit-slider-thumb]:to-indigo-400
+            [&::-webkit-slider-thumb]:shadow-lg
+            [&::-webkit-slider-thumb]:shadow-purple-500/50
+            [&::-webkit-slider-thumb]:cursor-pointer
+            [&::-webkit-slider-thumb]:transition-transform
+            [&::-webkit-slider-thumb]:hover:scale-110
+            [&::-moz-range-thumb]:w-5
+            [&::-moz-range-thumb]:h-5
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:bg-gradient-to-r
+            [&::-moz-range-thumb]:from-purple-400
+            [&::-moz-range-thumb]:to-indigo-400
+            [&::-moz-range-thumb]:border-0
+            [&::-moz-range-thumb]:shadow-lg
+            [&::-moz-range-thumb]:shadow-purple-500/50
+            [&::-moz-range-thumb]:cursor-pointer"
+        />
+      </div>
+
       {/* Status indicator */}
-      <div className="mt-8 flex items-center gap-2">
+      <div className="mt-6 flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
         <span className="text-purple-300 text-sm uppercase tracking-wider">
           {isRunning ? 'Running' : 'Stopped'}
